@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+python-multipart
+httpx
+google-api-python-client
+google-auth-oauthlib
+google-auth-httplib2
+pywebview
+pyngrok
