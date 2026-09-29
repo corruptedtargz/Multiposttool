@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Clip Poster</title>
+<style>
+:root{--bg:#0f1115;--card:#181b22;--line:#2a2f3a;--fg:#e8eaf0;--mut:#8b92a3;--acc:#6c8cff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px system-ui,sans-serif;padding:18px}
+.wrap{max-width:520px;margin:0 auto}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+h1{margin:0;font-size:20px}h2{font-size:15px;margin:22px 0 4px}
+.icon{background:none;border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:6px 12px;cursor:pointer;width:auto;margin:0;font-size:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px}
+#drop{border:2px dashed var(--line);border-radius:12px;padding:28px;text-align:center;color:var(--mut);cursor:pointer}
+#drop.over,#drop:hover{border-color:var(--acc);color:var(--fg)}
+video{width:100%;max-height:240px;border-radius:10px;margin-top:12px;display:none;background:#000}
+label.f{display:block;margin:14px 0 5px;color:var(--mut);font-size:13px}
+input[type=text],input[type=password],textarea,select{width:100%;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:9px;font:inherit}
+textarea{min-height:80px;resize:vertical}
+.plats{display:flex;gap:8px;flex-wrap:wrap}
+.plats label{display:flex;gap:6px;align-items:center;background:var(--bg);border:1px solid var(--line);padding:8px 12px;border-radius:8px;cursor:pointer}
+button.main,button.sec{margin-top:14px;width:100%;padding:11px;border-radius:10px;font:600 15px system-ui;cursor:pointer;border:0}
+button.main{background:var(--acc);color:#fff}
+button.sec{background:var(--bg);color:var(--fg);border:1px solid var(--line)}
+button:disabled{opacity:.5;cursor:default}
+#status{margin-top:16px}
+.row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-top:1px solid var(--line);font-size:14px}
+.row small{color:var(--mut);display:block;word-break:break-all}
+.done{color:#4ade80}.error{color:#f87171}.running{color:#fbbf24}
+.hint{color:var(--mut);font-size:12px;margin:4px 0 0}.ok{color:#4ade80}
+#settings{display:none}
+</style></head><body><div class="wrap">
+<header><h1 id="ttl">Clip Poster</h1><button class="icon" id="gear">⚙ Settings</button></header>
+
+<div class="card" id="main">
+  <div id="drop">Drop a video here or click to choose<br><small>MP4 / MOV · vertical 9:16 · under 500 MB</small></div>
+  <input id="file" type="file" accept="video/mp4,video/quicktime" hidden>
+  <video id="preview" controls playsinline></video>
+  <label class="f" for="title">Title (YouTube)</label>
+  <input id="title" type="text" maxlength="100" placeholder="Short, punchy title">
+  <label class="f" for="caption">Caption / description</label>
+  <textarea id="caption" placeholder="Caption with #hashtags"></textarea>
+  <label class="f">Post to</label>
+  <div class="plats">
+    <label><input type="checkbox" value="youtube" checked> YouTube Shorts</label>
+    <label><input type="checkbox" value="instagram" checked> Instagram Reels</label>
+    <label><input type="checkbox" value="tiktok" checked> TikTok</label>
+  </div>
+  <button class="main" id="go" disabled>Post</button>
+  <div id="status"></div>
+</div>
+
+<div class="card" id="settings">
+  <h2 style="margin-top:0">YouTube</h2>
+  <p class="hint">Needs a Google Cloud OAuth "Desktop app" client (YouTube Data API v3 enabled).</p>
+  <input id="csfile" type="file" accept=".json" hidden>
+  <button class="sec" id="csbtn">Upload client_secret.json</button>
+  <button class="sec" id="ytconnect">Connect YouTube</button>
+  <p class="hint" id="ytstate"></p>
+  <label class="f">Visibility (stays private until Google audits your project)</label>
+  <select id="YOUTUBE_PRIVACY"><option>private</option><option>unlisted</option><option>public</option></select>
+
+  <h2>Instagram Reels</h2>
+  <label class="f">Instagram user ID</label><input type="text" id="IG_USER_ID">
+  <label class="f">Access token</label><input type="password" id="IG_ACCESS_TOKEN">
+  <label class="f">ngrok authtoken (free; lets Instagram download your clip)</label><input type="password" id="NGROK_AUTHTOKEN">
+
+  <h2>TikTok</h2>
+  <label class="f">Client key</label><input type="text" id="TIKTOK_CLIENT_KEY">
+  <label class="f">Client secret</label><input type="password" id="TIKTOK_CLIENT_SECRET">
+  <label class="f">Access token</label><input type="password" id="TIKTOK_ACCESS_TOKEN">
+  <label class="f">Refresh token</label><input type="password" id="TIKTOK_REFRESH_TOKEN">
+  <label class="f">Visibility (unaudited apps can only use SELF_ONLY)</label>
+  <select id="TIKTOK_PRIVACY"><option>SELF_ONLY</option><option>MUTUAL_FOLLOW_FRIENDS</option><option>PUBLIC_TO_EVERYONE</option></select>
+  <p class="hint">Blank fields keep what's already saved. Settings live in your user profile folder on this PC.</p>
+  <button class="main" id="save">Save</button>
+</div>
+
+<script>
+const $=s=>document.querySelector(s);
+const FIELDS=['YOUTUBE_PRIVACY','IG_USER_ID','IG_ACCESS_TOKEN','NGROK_AUTHTOKEN','TIKTOK_CLIENT_KEY','TIKTOK_CLIENT_SECRET','TIKTOK_ACCESS_TOKEN','TIKTOK_REFRESH_TOKEN','TIKTOK_PRIVACY'];
+let file=null,inSettings=false;
+
+// ---- view switching ----
+$('#gear').onclick=async()=>{
+  inSettings=!inSettings;
+  $('#main').style.display=inSettings?'none':'block';
+  $('#settings').style.display=inSettings?'block':'none';
+  $('#gear').textContent=inSettings?'← Back':'⚙ Settings';
+  $('#ttl').textContent=inSettings?'Settings':'Clip Poster';
+  if(inSettings)loadSettings();
+};
+async function loadSettings(){
+  const d=await (await fetch('/api/settings')).json();
+  FIELDS.forEach(k=>{const el=$('#'+k);el.value=d.values[k]||el.value;
+    if(d.secrets_set[k])el.placeholder='•••••• saved'});
+  const y=d.youtube;
+  $('#ytstate').innerHTML=y.connected?'<span class="ok">✓ Connected</span>':
+    (y.has_client_secret?'client_secret.json uploaded — now click Connect':'Not connected');
+}
+$('#save').onclick=async()=>{
+  const p={};FIELDS.forEach(k=>p[k]=$('#'+k).value);
+  await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
+  FIELDS.forEach(k=>{if($('#'+k).type==='password')$('#'+k).value=''});
+  $('#save').textContent='Saved ✓';setTimeout(()=>$('#save').textContent='Save',1500);loadSettings();
+};
+$('#csbtn').onclick=()=>$('#csfile').click();
+$('#csfile').onchange=async e=>{
+  const fd=new FormData();fd.append('file',e.target.files[0]);
+  const r=await fetch('/api/youtube/secret',{method:'POST',body:fd});
+  if(!r.ok)alert((await r.json()).detail);loadSettings();
+};
+$('#ytconnect').onclick=async()=>{
+  $('#ytstate').textContent='Finish logging in in your browser…';
+  const r=await fetch('/api/youtube/connect',{method:'POST'});
+  if(!r.ok)alert((await r.json()).detail);loadSettings();
+};
+
+// ---- posting ----
+const drop=$('#drop'),input=$('#file'),prev=$('#preview'),go=$('#go');
+function setFile(f){if(!f)return;file=f;prev.src=URL.createObjectURL(f);prev.style.display='block';drop.textContent=f.name;go.disabled=false}
+drop.onclick=()=>input.click();input.onchange=()=>setFile(input.files[0]);
+drop.ondragover=e=>{e.preventDefault();drop.classList.add('over')};
+drop.ondragleave=()=>drop.classList.remove('over');
+drop.ondrop=e=>{e.preventDefault();drop.classList.remove('over');setFile(e.dataTransfer.files[0])};
+const NAMES={youtube:'YouTube Shorts',instagram:'Instagram Reels',tiktok:'TikTok'};
+function render(d){$('#status').innerHTML=Object.entries(d.platforms).map(([p,s])=>
+ `<div class="row"><div>${NAMES[p]}<small>${s.detail||''}</small></div><div class="${s.state}">${s.state}</div></div>`).join('')}
+go.onclick=()=>{
+  const plats=[...document.querySelectorAll('.plats input:checked')].map(c=>c.value);
+  if(!plats.length)return alert('Pick a platform');
+  const fd=new FormData();fd.append('video',file);fd.append('title',$('#title').value);
+  fd.append('caption',$('#caption').value);fd.append('platforms',plats.join(','));
+  go.disabled=true;go.textContent='Uploading…';
+  const xhr=new XMLHttpRequest();xhr.open('POST','/api/post');
+  xhr.upload.onprogress=e=>{if(e.lengthComputable)go.textContent=`Uploading… ${Math.round(e.loaded/e.total*100)}%`};
+  xhr.onload=()=>{
+    if(xhr.status!==200){go.disabled=false;go.textContent='Post';return alert(JSON.parse(xhr.responseText).detail||'Failed')}
+    const {job_id}=JSON.parse(xhr.responseText);go.textContent='Posting…';
+    const t=setInterval(async()=>{
+      const d=await (await fetch('/api/status/'+job_id)).json();render(d);
+      if(Object.values(d.platforms).every(s=>['done','error'].includes(s.state))){clearInterval(t);go.disabled=false;go.textContent='Post another'}
+    },2000);
+  };
+  xhr.send(fd);
+};
+</script></div></body></html>
